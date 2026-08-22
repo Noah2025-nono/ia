@@ -1,4 +1,3 @@
-
 <style>
   html, body { margin: 0; padding: 0; background: #06060f; }
   #wrap { position: relative; background: #06060f; border-radius: var(--border-radius-lg); overflow: hidden; }
@@ -188,15 +187,12 @@ canvas.addEventListener('click', e => {
 
 function floatText(text) {
   const el = document.createElement('div');
-  el.style.cssText = `position:absolute;font-family:var(--font-sans);font-size:14px;color:rgba(200,215,255,0.9);pointer-events:none;white-space:nowrap;left:${20+Math.random()*60}%;top:${60+Math.random()*20}%`;
+  el.style.cssText = `position:absolute;font-family:var(--font-sans);font-size:14px;color:rgba(200,215,255,0.9);pointer-events:none;white-space:nowrap;left:${20+Math.random()*60}%;top:${60+Math.random()*20}%;`;
   el.textContent = '✦ ' + text;
   document.getElementById('floating').appendChild(el);
-  let y = parseFloat(el.style.top);
   let t = 0;
   const anim = setInterval(() => {
     t++;
-    y -= 0.08;
-    el.style.top = y + '%';
     el.style.opacity = t < 20 ? (t/20) : Math.max(0, 1 - (t-60)/40);
     if (t > 100) { clearInterval(anim); el.remove(); }
   }, 30);
