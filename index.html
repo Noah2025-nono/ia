@@ -8,10 +8,12 @@
   #msg { flex: 1; background: rgba(255,255,255,0.07); border: none; border-radius: 100px; padding: 12px 20px; font-size: 15px; color: rgba(255,255,255,0.9); font-family: var(--font-sans); }
   #msg::placeholder { color: rgba(255,255,255,0.3); }
   #msg:focus { border-color: transparent; box-shadow: none; outline: none; }
-  #btn { background: rgba(100,130,255,0.15); border: none; border-radius: 100px; padding: 12px 20px; font-size: 14px; color: rgba(180,200,255,0.9); font-family: var(--font-sans); }
+  #btn { background: rgba(100,130,255,0.15); border: none; border-radius: 100px; padding: 12px 20px; font-size: 14px; color: rgba(180,200,255,0.9); font-family: var(--font-sans); cursor: pointer; transition: all 0.3s; }
   #btn:hover { background: rgba(100,130,255,0.28); box-shadow: 0 0 16px rgba(100,130,255,0.3); }
+  #btn:disabled { opacity: 0.5; cursor: not-allowed; }
   #hint { font-family: var(--font-sans); font-size: 12px; color: rgba(255,255,255,0.25); letter-spacing: 0.04em; }
   #floating { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .response-text { font-size: 13px; color: rgba(220,235,255,0.95); font-style: italic; }
 </style>
 <div id="wrap">
   <canvas id="c"></canvas>
@@ -29,6 +31,11 @@
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 let W, H, stars = [], mouse = {x:-999,y:-999}, frame = 0;
+
+// Déterminer l'URL de l'API (Netlify ou localhost)
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3000/api/message'
+  : `${window.location.origin}/.netlify/functions/message`;
 
 function resize() {
   W = canvas.width = canvas.offsetWidth;
@@ -185,10 +192,12 @@ canvas.addEventListener('click', e => {
   }
 });
 
-function floatText(text) {
+function floatText(text, isResponse = false) {
   const el = document.createElement('div');
-  el.style.cssText = `position:absolute;font-family:var(--font-sans);font-size:14px;color:rgba(200,215,255,0.9);pointer-events:none;white-space:nowrap;left:${20+Math.random()*60}%;top:${60+Math.random()*20}%;`;
-  el.textContent = '✦ ' + text;
+  const className = isResponse ? 'response-text' : '';
+  el.className = className;
+  el.style.cssText = `position:absolute;font-family:var(--font-sans);font-size:${isResponse ? '13px' : '14px'};color:${isResponse ? 'rgba(220,235,255,0.95)' : 'rgba(200,215,255,0.9)'};pointer-events:none;white-space:nowrap;left:${20+Math.random()*60}%;top:${60+Math.random()*20}%;text-shadow:0 0 10px rgba(140,160,255,0.4);`;
+  el.textContent = (isResponse ? '✧ ' : '✦ ') + text;
   document.getElementById('floating').appendChild(el);
   let t = 0;
   const anim = setInterval(() => {
@@ -204,13 +213,40 @@ function floatText(text) {
   }
 }
 
-function send() {
+async function send() {
   const input = document.getElementById('msg');
+  const btn = document.getElementById('btn');
   const val = input.value.trim();
+  
   if (!val) return;
-  floatText(val);
+  
+  floatText(val, false);
   input.value = '';
-  input.focus();
+  
+  btn.disabled = true;
+  btn.textContent = 'Pensée...';
+  
+  try {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: val })
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const data = await response.json();
+    if (data.response) {
+      floatText(data.response, true);
+    }
+  } catch (error) {
+    console.error('Erreur API:', error);
+    floatText('Les étoiles sont silencieuses...', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer ↗';
+    input.focus();
+  }
 }
 
 document.getElementById('btn').addEventListener('click', send);
