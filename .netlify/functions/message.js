@@ -1,30 +1,18 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
-// Charger la config
-let config;
-try {
-  const configPath = path.join(__dirname, '../../ai-config.json');
-  config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-} catch (error) {
-  console.error('Erreur chargement config:', error);
-  config = {
-    ai: {
-      model: 'mistral',
-      endpoint: 'http://localhost:11434/api/generate',
-      settings: { temperature: 0.7, top_p: 0.9, top_k: 40, num_predict: 128, stream: false }
-    },
-    display: { max_response_length: 120 },
-    fallback: { enabled: true, responses: ['Les étoiles sont silencieuses...'] }
-  };
-}
+// Configuration Hugging Face - Modèle sans censure
+const HF_API_TOKEN = process.env.HF_API_TOKEN || 'hf_YOUR_TOKEN_HERE';
+const HF_MODEL = 'mistralai/Mistral-7B-Instruct-v0.2'; // Modèle puissant et peu censuré
+
+// Alternative: meta-llama/Llama-2-7b-chat-hf (encore moins censuré)
+// ou: NousResearch/Nous-Hermes-2-Mistral-7B-DPO
 
 exports.handler = async (event, context) => {
   // Accepter uniquement POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Méthode non autorisée' })
     };
   }
@@ -35,51 +23,106 @@ exports.handler = async (event, context) => {
     if (!message || !message.trim()) {
       return {
         statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: 'Message vide' })
       };
     }
 
-    // Appel à l'API Ollama
-    const response = await axios.post(config.ai.endpoint, {
-      model: config.ai.model,
-      prompt: message,
-      stream: config.ai.settings.stream,
-      temperature: config.ai.settings.temperature,
-      top_p: config.ai.settings.top_p,
-      top_k: config.ai.settings.top_k,
-      num_predict: config.ai.settings.num_predict,
-      system: config.system_prompt
-    });
+    if (!HF_API_TOKEN || HF_API_TOKEN === 'hf_YOUR_TOKEN_HERE') {
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          response: '✧ Les tokens API ne sont pas configurés. Ajoute HF_API_TOKEN dans les variables d\'environnement Netlify.' 
+        })
+      };
+    }
 
-    let reply = response.data.response || response.data.text || '';
+    console.log('📨 Message reçu:', message);
+    console.log('🤖 Utilisant le modèle:', HF_MODEL);
+
+    // Appel à l'API Hugging Face
+    const response = await axios.post(
+      `https://api-inference.huggingface.co/models/${HF_MODEL}`,
+      {
+        inputs: message,
+        parameters: {
+          max_new_tokens: 200,
+          temperature: 0.9,
+          top_p: 0.95,
+          repetition_penalty: 1.1,
+          do_sample: true
+        },
+        options: {
+          use_cache: false,
+          wait_for_model: true
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${HF_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      }
+    );
+
+    console.log('✅ Réponse brute:', response.data);
+
+    // Parser la réponse
+    let reply = '';
     
-    // Limiter la longueur
-    if (reply.length > config.display.max_response_length) {
-      reply = reply.substring(0, config.display.max_response_length) + '...';
+    if (Array.isArray(response.data) && response.data[0]) {
+      if (response.data[0].generated_text) {
+        reply = response.data[0].generated_text;
+      } else if (response.data[0]) {
+        reply = JSON.stringify(response.data[0]);
+      }
+    } else if (response.data.generated_text) {
+      reply = response.data.generated_text;
+    } else {
+      reply = JSON.stringify(response.data);
+    }
+
+    // Nettoyer la réponse (enlever le prompt si dupliqué)
+    reply = reply.replace(message, '').trim();
+    
+    // Limiter à 250 caractères max
+    if (reply.length > 250) {
+      reply = reply.substring(0, 250) + '...';
+    }
+
+    // Si la réponse est vide, réessayer ou utiliser un fallback
+    if (!reply || reply.length < 5) {
+      reply = '✧ Le cosmos pense profondément à ta question...';
     }
 
     return {
       statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ response: reply })
     };
 
   } catch (error) {
-    console.error('Erreur Ollama:', error.message);
-    
-    // Fallback si l'API échoue
-    if (config.fallback && config.fallback.enabled) {
-      const fallback = config.fallback.responses[
-        Math.floor(Math.random() * config.fallback.responses.length)
-      ];
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ response: fallback })
-      };
-    }
-    
+    console.error('❌ Erreur complète:', error.message);
+    console.error('Status:', error.response?.status);
+    console.error('Data:', error.response?.data);
+
+    // Réponses fallback selon le type d'erreur
+    const fallbacks = {
+      429: '✧ Le cosmos est très occupé en ce moment... Réessaie dans quelques secondes.',
+      503: '✧ Les serveurs du cosmos sont en maintenance... Reviens plus tard.',
+      401: '✧ Erreur d\'authentification - Configure ta clé API HF_API_TOKEN dans Netlify.',
+      default: '✧ Les étoiles sont silencieuses... ' + error.message.substring(0, 30)
+    };
+
+    const errorCode = error.response?.status;
+    const fallback = fallbacks[errorCode] || fallbacks.default;
+
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Impossible de contacter le serveur IA' })
+      statusCode: 200, // Retourner 200 même en erreur pour afficher le fallback
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ response: fallback })
     };
   }
 };
