@@ -2,6 +2,71 @@
   html, body { margin: 0; padding: 0; background: #06060f; }
   #wrap { position: relative; background: #06060f; border-radius: var(--border-radius-lg); overflow: hidden; }
   canvas { display: block; width: 100%; }
+  
+  /* Boîte de réponse */
+  #response-box {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(60, 80, 180, 0.15);
+    border: 1px solid rgba(140, 160, 255, 0.3);
+    border-radius: 12px;
+    padding: 16px 20px;
+    max-width: 500px;
+    width: 90%;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(100, 130, 255, 0.15);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  #response-box.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #response-box-content {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: rgba(220, 235, 255, 0.95);
+    line-height: 1.5;
+    word-wrap: break-word;
+    font-style: italic;
+  }
+
+  #response-box-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: rgba(140, 160, 255, 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  #response-box-close {
+    background: none;
+    border: none;
+    color: rgba(140, 160, 255, 0.6);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+  }
+
+  #response-box-close:hover {
+    color: rgba(140, 160, 255, 0.95);
+  }
+
   #ui { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 16px; width: 90%; max-width: 420px; }
   #title { font-family: var(--font-sans); font-size: 22px; font-weight: 500; color: rgba(255,255,255,0.9); letter-spacing: 0.08em; text-align: center; text-shadow: 0 0 30px rgba(140,160,255,0.6); }
   #input-row { display: flex; width: 100%; gap: 10px; align-items: center; }
@@ -15,9 +80,20 @@
   #floating { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
   .response-text { font-size: 13px; color: rgba(220,235,255,0.95); font-style: italic; }
 </style>
+
 <div id="wrap">
   <canvas id="c"></canvas>
   <div id="floating"></div>
+  
+  <!-- Boîte de réponse -->
+  <div id="response-box">
+    <div id="response-box-header">
+      <span>✧ Réponse du cosmos</span>
+      <button id="response-box-close">✕</button>
+    </div>
+    <div id="response-box-content"></div>
+  </div>
+
   <div id="ui">
     <div id="title">✦ Cosmos</div>
     <div id="input-row">
@@ -27,6 +103,7 @@
     <div id="hint">bougez la souris · cliquez pour créer des étoiles</div>
   </div>
 </div>
+
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -196,7 +273,7 @@ function floatText(text, isResponse = false) {
   const el = document.createElement('div');
   const className = isResponse ? 'response-text' : '';
   el.className = className;
-  el.style.cssText = `position:absolute;font-family:var(--font-sans);font-size:${isResponse ? '13px' : '14px'};color:${isResponse ? 'rgba(220,235,255,0.95)' : 'rgba(200,215,255,0.9)'};pointer-events:none;white-space:nowrap;left:${20+Math.random()*60}%;top:${60+Math.random()*20}%;text-shadow:0 0 10px rgba(140,160,255,0.4);`;
+  el.style.cssText = `position:absolute;font-family:var(--font-sans);font-size:${isResponse ? '13px' : '14px'};color:${isResponse ? 'rgba(220,235,255,0.95)' : 'rgba(200,215,255,0.9)'};pointer-events:none;left:${Math.random()*W*0.6+W*0.2}px;top:${Math.random()*H*0.3+H*0.35}px;opacity:0;text-align:center;white-space:nowrap;filter:drop-shadow(0 0 10px rgba(100,130,255,0.4));`;
   el.textContent = (isResponse ? '✧ ' : '✦ ') + text;
   document.getElementById('floating').appendChild(el);
   let t = 0;
@@ -213,6 +290,30 @@ function floatText(text, isResponse = false) {
   }
 }
 
+// Fonction pour afficher la réponse dans la boîte
+function showResponseBox(text) {
+  const responseBox = document.getElementById('response-box');
+  const responseContent = document.getElementById('response-box-content');
+  responseContent.textContent = text;
+  responseBox.classList.add('show');
+}
+
+// Fonction pour fermer la boîte
+function closeResponseBox() {
+  const responseBox = document.getElementById('response-box');
+  responseBox.classList.remove('show');
+}
+
+// Événement du bouton fermer
+document.getElementById('response-box-close').addEventListener('click', closeResponseBox);
+
+// Fermer aussi quand on clique en dehors
+document.getElementById('wrap').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('wrap')) {
+    closeResponseBox();
+  }
+});
+
 async function send() {
   const input = document.getElementById('msg');
   const btn = document.getElementById('btn');
@@ -225,6 +326,7 @@ async function send() {
   
   btn.disabled = true;
   btn.textContent = 'Pensée...';
+  closeResponseBox();
   
   try {
     const response = await fetch(API_URL, {
@@ -238,10 +340,13 @@ async function send() {
     const data = await response.json();
     if (data.response) {
       floatText(data.response, true);
+      showResponseBox(data.response);
     }
   } catch (error) {
     console.error('Erreur API:', error);
-    floatText('Les étoiles sont silencieuses...', true);
+    const fallback = 'Les étoiles sont silencieuses...';
+    floatText(fallback, true);
+    showResponseBox(fallback);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Envoyer ↗';
