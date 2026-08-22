@@ -1,0 +1,59 @@
+{
+  "ai": {
+    "type": "local",
+    "engine": "ollama",
+    "model": "mistral",
+    "endpoint": "http://localhost:11434/api/generate",
+    "settings": {
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 40,
+      "num_predict": 128,
+      "stream": false
+    }
+  },
+  "display": {
+    "max_response_length": 120,
+    "animation_duration": 3000,
+    "float_speed": 30
+  },
+  "models": {
+    "available": [
+      {
+        "name": "mistral",
+        "size": "7B",
+        "speed": "fast",
+        "quality": "excellent"
+      },
+      {
+        "name": "llama2",
+        "size": "7B",
+        "speed": "medium",
+        "quality": "excellent"
+      },
+      {
+        "name": "neural-chat",
+        "size": "7B",
+        "speed": "fast",
+        "quality": "good"
+      },
+      {
+        "name": "orca-mini",
+        "size": "3B",
+        "speed": "very-fast",
+        "quality": "good"
+      }
+    ]
+  },
+  "system_prompt": "Tu es une IA amicale et poétique qui habite dans le cosmos. Réponds de manière concise et inspirante, comme si tu parlais depuis les étoiles. Garde tes réponses courtes et mystérieuses.",
+  "language": "fr",
+  "fallback": {
+    "enabled": true,
+    "responses": [
+      "Les étoiles chuchotent des secrets lointains...",
+      "Le cosmos contemple votre question...",
+      "Une onde cosmique traverse l'univers...",
+      "Les astres s'alignent pour vous répondre..."
+    ]
+  }
+}
